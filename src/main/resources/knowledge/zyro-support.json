@@ -1,0 +1,16 @@
+[
+  {
+    "id": "support-rule-1",
+    "title": "秒杀券查看说明",
+    "content": "秒杀券抢购成功后可在用户优惠券列表中查看。库存、订单状态属于动态事实，需通过业务Tool或业务Service查询。",
+    "tags": ["coupon", "seckill", "support"],
+    "scenes": ["support"]
+  },
+  {
+    "id": "support-rule-2",
+    "title": "推荐解释边界",
+    "content": "推荐回答可引用规则说明，但价格、库存、距离、营业状态等动态事实必须来自Tool调用结果，不得由RAG直接生成。",
+    "tags": ["recommendation", "rule", "rag-boundary"],
+    "scenes": ["support", "recommendation"]
+  }
+]

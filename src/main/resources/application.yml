@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: xingang-community
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+
+ai:
+  rag:
+    enabled: true
+    store-file: classpath:knowledge/zyro-support.json
+    similarity-threshold: 0.65
+  knowledge:
+    top-k: 5
+  rate-limit:
+    chat-limit: 60
+    stream-limit: 30
+    window-seconds: 60
