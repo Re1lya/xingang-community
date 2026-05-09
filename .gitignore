@@ -1,0 +1,28 @@
+# Build output
+target/
+build/
+out/
+
+# IDE / editor
+.idea/
+.vscode/
+*.iml
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Runtime / local config
+*.pid
+*.tmp
+*.swp
+application-local.yml
+application-secret.yml
+
+# Maven wrapper generated files
+.mvn/wrapper/maven-wrapper.jar
+

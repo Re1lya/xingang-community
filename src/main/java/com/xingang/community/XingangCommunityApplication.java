@@ -12,3 +12,4 @@ public class XingangCommunityApplication {
         SpringApplication.run(XingangCommunityApplication.class, args);
     }
 }
+

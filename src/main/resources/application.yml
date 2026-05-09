@@ -32,12 +32,41 @@ mybatis-plus:
       logic-delete-value: 1
       logic-not-delete-value: 0
 
-logging:
-  level:
-    com.xingang.community: debug
-
 management:
   endpoints:
     web:
       exposure:
         include: health,prometheus
+
+ai:
+  rag:
+    enabled: true
+    store-file: classpath:knowledge/zyro-support.json
+    similarity-threshold: 0.65
+  knowledge:
+    top-k: 5
+  embedding:
+    provider: dashscope
+  rerank:
+    enabled: true
+  rate-limit:
+    chat-limit: 60
+    stream-limit: 30
+    window-seconds: 60
+  audit:
+    stream-key: hmdp:agent:audit
+
+map:
+  baidu:
+    api-key: ${BAIDU_MAP_API_KEY:}
+
+llm:
+  openai-compatible:
+    base-url: ${OPENAI_BASE_URL:}
+    api-key: ${OPENAI_API_KEY:}
+    chat-model: ${OPENAI_CHAT_MODEL:}
+
+logging:
+  level:
+    com.xingang.community: debug
+
