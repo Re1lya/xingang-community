@@ -1,15 +1,13 @@
 package com.xingang.community.order.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xingang.community.common.constant.ErrorCode;
 import com.xingang.community.common.constant.RedisConstants;
 import com.xingang.community.common.exception.BusinessException;
 import com.xingang.community.common.util.SnowflakeIdWorker;
 import com.xingang.community.common.util.UserContext;
 import com.xingang.community.entity.SeckillVoucher;
-import com.xingang.community.entity.VoucherOrder;
-import com.xingang.community.order.mapper.VoucherOrderMapper;
 import com.xingang.community.order.service.VoucherOrderService;
+import com.xingang.community.order.service.VoucherOrderTransactionService;
 import com.xingang.community.voucher.mapper.SeckillVoucherMapper;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
@@ -21,7 +19,6 @@ import org.springframework.data.redis.connection.stream.*;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -63,7 +60,7 @@ public class VoucherOrderServiceImpl implements VoucherOrderService {
     private SeckillVoucherMapper seckillVoucherMapper;
 
     @Resource
-    private VoucherOrderMapper voucherOrderMapper;
+    private VoucherOrderTransactionService voucherOrderTransactionService;
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
@@ -227,8 +224,9 @@ public class VoucherOrderServiceImpl implements VoucherOrderService {
                     }
 
                     try {
-                        // 4. 事务创建订单
-                        createOrderInTransaction(Long.valueOf(orderId), Long.valueOf(userId), Long.valueOf(voucherId));
+                        // 4. 通过独立Bean调用事务方法（Spring AOP代理生效）
+                        voucherOrderTransactionService.createOrderInTransaction(
+                                Long.valueOf(orderId), Long.valueOf(userId), Long.valueOf(voucherId));
 
                         // 5. ACK消息
                         stringRedisTemplate.opsForStream().acknowledge(
@@ -276,45 +274,5 @@ public class VoucherOrderServiceImpl implements VoucherOrderService {
         // TODO: 遍历pending → XCLAIM → 重试 → ACK
     }
 
-    // ==================== 事务创建订单 ====================
 
-    /**
-     * 在事务中二次校验并创建订单。
-     *
-     * <p>数据库扣减库存使用乐观条件 stock > 0，防止最终库存超卖。</p>
-     *
-     * @param orderId   秒杀入口生成的订单ID
-     * @param userId    用户ID
-     * @param voucherId 秒杀券ID
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public void createOrderInTransaction(Long orderId, Long userId, Long voucherId) {
-        // 1. 检查订单是否已存在（二次校验一人一单）
-        Long existCount = voucherOrderMapper.selectCount(
-                new LambdaQueryWrapper<VoucherOrder>()
-                        .eq(VoucherOrder::getUserId, userId)
-                        .eq(VoucherOrder::getVoucherId, voucherId)
-        );
-        if (existCount > 0) {
-            log.warn("Duplicate order prevented in transaction: userId={}, voucherId={}", userId, voucherId);
-            return;
-        }
-
-        // 2. 乐观扣减MySQL库存 (WHERE stock > 0)
-        int rows = seckillVoucherMapper.deductStock(voucherId);
-        if (rows == 0) {
-            log.warn("DB stock deduct failed (stock=0): voucherId={}", voucherId);
-            throw new BusinessException(ErrorCode.SECKILL_STOCK_NOT_ENOUGH, "库存不足");
-        }
-
-        // 3. 插入订单记录
-        VoucherOrder order = new VoucherOrder();
-        order.setId(orderId);
-        order.setUserId(userId);
-        order.setVoucherId(voucherId);
-        order.setStatus(1); // 已创建
-        voucherOrderMapper.insert(order);
-
-        log.info("Order created in DB: orderId={}, userId={}, voucherId={}", orderId, userId, voucherId);
-    }
 }

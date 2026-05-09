@@ -23,6 +23,7 @@ import org.springframework.util.CollectionUtils;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -44,67 +45,90 @@ public class ShopServiceImpl implements ShopService {
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
+    private static final int MAX_RETRY = 3;
+    private static final long RETRY_SLEEP_MS = 50;
+
     @Override
     public ShopVO queryById(Long id) {
         String cacheKey = RedisConstants.CACHE_SHOP_KEY + id;
 
         // 1. 查Redis缓存
-        String cached = stringRedisTemplate.opsForValue().get(cacheKey);
-        if (cached != null) {
-            if ("".equals(cached)) {
-                return null; // 空值缓存，防穿透
-            }
-            try {
-                return MAPPER.readValue(cached, ShopVO.class);
-            } catch (JsonProcessingException e) {
-                log.warn("Failed to deserialize shop cache: id={}", id, e);
-            }
+        ShopVO cachedVO = getCachedShop(cacheKey);
+        if (cachedVO != null || isNullCached(cacheKey)) {
+            return cachedVO; // 命中缓存或空值缓存
         }
 
-        // 2. 缓存未命中，使用互斥锁防击穿
+        // 2. 缓存未命中，使用互斥锁防击穿（有限重试）
         String lockKey = RedisConstants.LOCK_SHOP_KEY + id;
-        try {
-            boolean locked = tryLock(lockKey);
-            if (!locked) {
-                // 获取锁失败，短暂等待后重试
-                Thread.sleep(50);
-                return queryById(id); // 递归重试
-            }
-
-            // 双重检查
-            cached = stringRedisTemplate.opsForValue().get(cacheKey);
-            if (cached != null) {
-                if ("".equals(cached)) return null;
+        for (int retry = 0; retry < MAX_RETRY; retry++) {
+            String lockToken = tryLockWithToken(lockKey);
+            if (lockToken != null) {
                 try {
-                    return MAPPER.readValue(cached, ShopVO.class);
-                } catch (JsonProcessingException ignored) {}
+                    // 双重检查
+                    cachedVO = getCachedShop(cacheKey);
+                    if (cachedVO != null || isNullCached(cacheKey)) {
+                        return cachedVO;
+                    }
+                    // 查MySQL并写缓存
+                    return loadShopAndCache(id, cacheKey);
+                } finally {
+                    unlockWithToken(lockKey, lockToken);
+                }
             }
+            // 未获取锁，等待后重试
+            sleepUninterruptedly(RETRY_SLEEP_MS);
+        }
 
-            // 3. 查MySQL
-            Shop shop = shopMapper.selectById(id);
-            if (shop == null) {
-                // 写入空值缓存防穿透
-                stringRedisTemplate.opsForValue().set(
-                        cacheKey, "",
-                        RedisConstants.CACHE_NULL_TTL_MINUTES, TimeUnit.MINUTES
-                );
-                return null;
-            }
+        // 超过最大重试次数，直接查MySQL（降级）
+        log.warn("Failed to acquire lock after {} retries, fallback to DB: shopId={}", MAX_RETRY, id);
+        return loadShopAndCache(id, cacheKey);
+    }
 
-            ShopVO vo = toVO(shop);
+    private ShopVO getCachedShop(String cacheKey) {
+        String cached = stringRedisTemplate.opsForValue().get(cacheKey);
+        if (cached == null || "".equals(cached)) {
+            return null;
+        }
+        try {
+            return MAPPER.readValue(cached, ShopVO.class);
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to deserialize shop cache: key={}", cacheKey, e);
+            return null;
+        }
+    }
+
+    private boolean isNullCached(String cacheKey) {
+        String cached = stringRedisTemplate.opsForValue().get(cacheKey);
+        return "".equals(cached);
+    }
+
+    private ShopVO loadShopAndCache(Long id, String cacheKey) {
+        Shop shop = shopMapper.selectById(id);
+        if (shop == null) {
+            stringRedisTemplate.opsForValue().set(
+                    cacheKey, "",
+                    RedisConstants.CACHE_NULL_TTL_MINUTES, TimeUnit.MINUTES
+            );
+            return null;
+        }
+        ShopVO vo = toVO(shop);
+        try {
             stringRedisTemplate.opsForValue().set(
                     cacheKey,
                     MAPPER.writeValueAsString(vo),
                     RedisConstants.CACHE_SHOP_TTL_MINUTES, TimeUnit.MINUTES
             );
-            return vo;
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize shop: id={}", id, e);
+        }
+        return vo;
+    }
+
+    private void sleepUninterruptedly(long millis) {
+        try {
+            Thread.sleep(millis);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return null;
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException("序列化商户数据失败", e);
-        } finally {
-            unlock(lockKey);
         }
     }
 
@@ -197,16 +221,27 @@ public class ShopServiceImpl implements ShopService {
         return vos;
     }
 
-    // ---- 互斥锁工具 ----
+    // ---- 互斥锁工具（基于唯一token校验释放） ----
 
-    private boolean tryLock(String key) {
+    /**
+     * 尝试获取锁，成功返回唯一token，失败返回null。
+     * 只有持有该token的线程才能释放锁，防止误删。
+     */
+    private String tryLockWithToken(String key) {
+        String token = UUID.randomUUID().toString();
         Boolean ok = stringRedisTemplate.opsForValue()
-                .setIfAbsent(key, "1", RedisConstants.LOCK_SHOP_TTL_SECONDS, TimeUnit.SECONDS);
-        return Boolean.TRUE.equals(ok);
+                .setIfAbsent(key, token, RedisConstants.LOCK_SHOP_TTL_SECONDS, TimeUnit.SECONDS);
+        return Boolean.TRUE.equals(ok) ? token : null;
     }
 
-    private void unlock(String key) {
-        stringRedisTemplate.delete(key);
+    /**
+     * 释放锁：先校验token值再删除，避免删除其他线程持有的锁。
+     */
+    private void unlockWithToken(String key, String token) {
+        String current = stringRedisTemplate.opsForValue().get(key);
+        if (token.equals(current)) {
+            stringRedisTemplate.delete(key);
+        }
     }
 
     // ---- VO转换 ----
