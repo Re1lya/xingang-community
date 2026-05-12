@@ -201,7 +201,7 @@ public class LocalLifeAgentToolsImpl implements LocalLifeAgentTools {
                     trace.setOutputSize(envelope.getOutputSize());
                     selectedShopContext = updateSelectedShopContext(
                             selectedShopContext,
-                            extractTopShopId(envelope),
+                            extractTopShopIdFromCandidateEnvelope(envelope),
                             SHOP_ID_PRIORITY_SEARCH
                     );
                 }
@@ -239,7 +239,7 @@ public class LocalLifeAgentToolsImpl implements LocalLifeAgentTools {
                     trace.setOutputSize(envelope.getOutputSize());
                     selectedShopContext = updateSelectedShopContext(
                             selectedShopContext,
-                            extractTopShopId(envelope),
+                            extractTopShopIdFromCandidateEnvelope(envelope),
                             SHOP_ID_PRIORITY_RECOMMEND
                     );
                 }
@@ -257,7 +257,7 @@ public class LocalLifeAgentToolsImpl implements LocalLifeAgentTools {
                     trace.setOutputSize(envelope.getOutputSize());
                     selectedShopContext = updateSelectedShopContext(
                             selectedShopContext,
-                            extractTopShopId(envelope),
+                            extractTopShopIdFromRecommendationEnvelope(envelope),
                             SHOP_ID_PRIORITY_RECOMMEND
                     );
                 }
@@ -273,7 +273,7 @@ public class LocalLifeAgentToolsImpl implements LocalLifeAgentTools {
                     trace.setOutputSize(envelope.getOutputSize());
                     selectedShopContext = updateSelectedShopContext(
                             selectedShopContext,
-                            extractTopShopId(envelope),
+                            extractTopShopIdFromCandidateEnvelope(envelope),
                             SHOP_ID_PRIORITY_RECOMMEND
                     );
                 }
@@ -426,14 +426,14 @@ public class LocalLifeAgentToolsImpl implements LocalLifeAgentTools {
         return current;
     }
 
-    private Long extractTopShopId(ToolCallEnvelope<List<ShopCandidate>> envelope) {
+    private Long extractTopShopIdFromCandidateEnvelope(ToolCallEnvelope<List<ShopCandidate>> envelope) {
         if (envelope == null) {
             return null;
         }
         return extractTopShopId(envelope.getData());
     }
 
-    private Long extractTopShopId(ToolCallEnvelope<RecommendationResult> envelope) {
+    private Long extractTopShopIdFromRecommendationEnvelope(ToolCallEnvelope<RecommendationResult> envelope) {
         if (envelope == null || envelope.getData() == null) {
             return null;
         }
