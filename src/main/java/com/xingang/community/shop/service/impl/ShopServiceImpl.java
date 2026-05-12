@@ -244,6 +244,22 @@ public class ShopServiceImpl implements ShopService {
         }
     }
 
+    // ---- 商户更新与缓存清除 ----
+
+    @Override
+    public void evictShopCache(Long id) {
+        String cacheKey = RedisConstants.CACHE_SHOP_KEY + id;
+        stringRedisTemplate.delete(cacheKey);
+        log.info("Shop cache evicted: id={}", id);
+    }
+
+    @Override
+    public void updateShop(Shop shop) {
+        shopMapper.updateById(shop);
+        // 更新后删除缓存，下次查询自动重建
+        evictShopCache(shop.getId());
+    }
+
     // ---- VO转换 ----
 
     private ShopVO toVO(Shop shop) {
