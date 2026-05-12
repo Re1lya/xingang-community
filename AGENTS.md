@@ -4,6 +4,190 @@
 
 ---
 
+## 快速接手摘要：当前状态、固定流程和提示词标准
+
+本节是给新接手的产品经理 AI 第一时间阅读的速览。读完本节后，再继续阅读下方完整角色要求、开发文档和阶段计划。
+
+### A. 当前项目状态
+
+截至 2026-05-12，项目处于第三阶段准备期：
+
+1. `develop` 已完成第二阶段合并，当前稳定基线提交为：
+
+```text
+6da1d68 docs(plan): scaffold phase3 multi-agent development
+```
+
+2. 第二阶段已合并内容：
+   - DeepSeek 业务分支已合并：`eec3638 merge: integrate business phase2`
+   - Copilot AI 分支已合并：`9260865 merge: integrate ai phase2`
+   - 产品经理 AI 已完成集成修复：`d3e5fb2 chore(integration): finalize phase2 merge`
+
+3. 当前可继续开发的第三阶段分支：
+
+```text
+E:\javacode\xingang community             develop，产品经理集成、Review、文档维护
+E:\javacode\xingang-community-deepseek    feature/deepseek-business-phase3，DeepSeek业务可靠性方向
+E:\javacode\xingang-community-copilot     feature/copilot-ai-phase3，Copilot AI回答体验方向
+```
+
+4. 第三阶段计划文档：
+
+```text
+docs/superpowers/plans/2026-05-12-phase3-development.md
+```
+
+5. 当前验证状态：
+
+```text
+develop                         mvn -q -DskipTests compile 通过
+feature/deepseek-business-phase3 mvn -q -DskipTests compile 通过
+feature/copilot-ai-phase3        mvn -q -DskipTests compile 通过
+```
+
+6. 当前重要边界：
+   - 不再继续使用 `feature/deepseek-business-phase2` 和 `feature/copilot-ai-phase2` 开发。
+   - 不得删除旧分支或 worktree，除非用户明确确认。
+   - 下一轮正式派发任务前，必须先和用户确认第三阶段第一轮具体目标。
+
+### B. 产品经理 AI 固定工作流程
+
+接手本项目的产品经理 AI 必须按以下流程工作：
+
+1. 先读文档：
+   - `AGENTS.md`
+   - `新港社区项目开发文档.md`
+   - `docs/superpowers/plans/2026-05-12-phase3-development.md`
+
+2. 先和用户确认本轮目标，不要直接派发大任务。必须确认：
+   - 本轮是做演示体验、测试补齐、真实接口闭环、自然语言回答优化，还是业务可靠性增强。
+   - 哪些功能必须完整实现。
+   - 哪些功能只做骨架。
+   - 是否允许修改公共基线文件。
+   - 是否允许新增依赖、配置、SQL或接口。
+
+3. 给 DeepSeek / Copilot 派发任务时，必须使用本文档的提示词模板，不允许只说“你去修一下”。
+
+4. 执行者编码前必须先反馈实现方案，产品经理 AI 审阅方案后再允许其编码。
+
+5. 执行者完成后，产品经理 AI 必须：
+   - 查看分支状态。
+   - 查看最新提交。
+   - 查看 diff。
+   - 对照开发文档和阶段计划 Review。
+   - 运行 `mvn -q -DskipTests compile`。
+   - 给出 `APPROVED` / `NEEDS CHANGES` / `BLOCKED` 结论。
+
+6. 每完成一轮任务、Review或合并，必须更新 `AGENTS.md`。
+
+### C. 给执行者的标准提示词模板
+
+后续所有给 DeepSeek 和 Copilot 的任务提示词，都必须按下面结构编写。可以根据任务内容增删细节，但不能删除“编码前先反馈方案”和“完成后反馈细节”两部分。
+
+```text
+你当前工作目录：
+<填写 worktree 路径>
+
+你当前分支：
+<填写 feature 分支名>
+
+请先执行：
+1. git status --short --branch
+2. git merge develop
+3. 阅读 AGENTS.md
+4. 阅读 新港社区项目开发文档.md
+5. 阅读 docs/superpowers/plans/<当前阶段计划文件>
+
+本轮任务目标：
+<明确本轮要做什么，不要写泛泛目标>
+
+允许修改范围：
+<列出允许修改的目录和文件>
+
+禁止修改范围：
+<列出不得触碰的模块、公共基线、另一个执行者负责范围>
+
+在正式编码前，请先输出复杂功能的具体实现方案，等待确认后再动手：
+1. 你会修改哪些文件？
+2. 关键流程如何实现？
+3. 是否会影响另一个执行者负责的模块？
+4. 是否会修改公共基线？
+5. 哪些内容本轮完整实现，哪些只做骨架？
+6. 有哪些边界情况、异常情况和回滚风险？
+
+编码要求：
+1. 严格遵循 AGENTS.md 和开发文档。
+2. 不得引入未确认的新框架或新中间件。
+3. 不得越权修改其他模块。
+4. 动态事实必须来自 Service / DB / Redis / Tool，不得由 AI 编造。
+5. 复杂逻辑必须有清晰注释，但不要堆无意义注释。
+
+完成后请运行：
+mvn -q -DskipTests compile
+
+完成后请提交：
+git commit -m "<填写规范提交信息>"
+
+最终反馈必须包含：
+1. 修改文件清单。
+2. 关键复杂功能如何实现。
+3. 为什么选择这种实现方式。
+4. 边界情况如何处理。
+5. 哪些风险仍存在。
+6. 运行了什么验证命令，结果如何。
+7. 是否修改公共基线。
+```
+
+### D. 已完成任务示例：第二阶段 Review、修复、合并
+
+以下示例是本项目已经完成的一轮标准协作流程，后续 AI 必须照此节奏工作。
+
+1. 阶段目标：
+   - DeepSeek 负责业务侧第二阶段：数据库脚本、秒杀 Redis Stream 消费者、pending-list 恢复、秒杀库存初始化。
+   - Copilot 负责 AI 侧第二阶段：AI Tool 接入业务 Service、推荐预算单位统一、推荐结果 shopId 级联到详情和优惠券。
+
+2. 产品经理 AI 第一次 Review 发现问题：
+   - DeepSeek：`stream.orders` 消费组初始化没有 `MKSTREAM`，空 Stream 首次启动可能失败；pending-list 处理计数没有区分 ACK 是否成功。
+   - Copilot：Planner 抽取预算为“元”，数据库 `avg_price` 为“分”，直接比较会错杀候选；`get_shop_detail` 和 `get_shop_coupons` 仍传 `null`，没有真实 shopId 级联。
+
+3. 产品经理 AI 给执行者的修复要求：
+   - DeepSeek 必须用 `XGROUP CREATE ... MKSTREAM` 等价逻辑初始化消费组，区分 `BUSYGROUP` 和真实错误；`processSingleMessage` 改为返回 `boolean`，只有事务成功且 ACK 成功才计数。
+   - Copilot 必须将预算从“元”集中转换为“分”，并维护 `SelectedShopContext`，从推荐或搜索候选中提取 top shopId 后级联给详情和优惠券工具。
+
+4. 执行者修复后提交：
+
+```text
+12f136a fix(business): harden stream group init and pending ack counting
+6c3a504 fix(agent): align budget units and chain tool facts by shop id
+```
+
+5. 产品经理 AI 复审：
+   - 两个分支均 `mvn -q -DskipTests compile` 通过。
+   - DeepSeek 未修改 AI 模块。
+   - Copilot 未修改秒杀、订单、Lua、Redis Stream、事务消费者。
+   - Review 结论均为 `APPROVED`。
+
+6. 合并顺序：
+   - 先合并 DeepSeek 业务分支：`eec3638 merge: integrate business phase2`
+   - 编译通过后，再合并 Copilot AI 分支：`9260865 merge: integrate ai phase2`
+   - 合并 Copilot 后发现 Java 泛型擦除冲突，产品经理 AI 在 `develop` 做最小集成修复：
+
+```text
+将两个 extractTopShopId(ToolCallEnvelope<...>) 重载方法改名为：
+extractTopShopIdFromCandidateEnvelope
+extractTopShopIdFromRecommendationEnvelope
+```
+
+7. 最终收尾：
+   - 运行 `mvn -q -DskipTests compile` 通过。
+   - 更新 `AGENTS.md` 和 `新港社区项目开发文档.md`。
+   - 提交：`d3e5fb2 chore(integration): finalize phase2 merge`
+   - 创建第三阶段分支和计划：`6da1d68 docs(plan): scaffold phase3 multi-agent development`
+
+这个示例体现了本项目的固定原则：先确认任务，再要求执行者反馈方案，编码后严格 Review，合并后必须编译验证和更新文档。
+
+---
+
 ## 0. 产品经理 AI 角色接替要求
 
 本节用于让新的产品经理 AI 在阅读本文档后，能够完整接替当前产品经理 AI 的工作方式、判断标准、沟通风格和协作节奏。接替者必须先理解自己不是单纯代码执行者，而是项目统筹者、技术负责人、文档维护者、质量审核者和两名执行 AI 的任务指挥者。
