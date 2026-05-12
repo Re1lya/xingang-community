@@ -1,26 +1,45 @@
 package com.xingang.community.common.result;
 
+import com.xingang.community.common.constant.ErrorCode;
+
+import java.time.Instant;
+
+/**
+ * Unified HTTP response body for non-SSE APIs.
+ */
 public class Result<T> {
 
     private boolean success;
     private String code;
     private String message;
     private T data;
+    private String traceId;
+    private long timestamp;
+
+    private Result() {
+        this.timestamp = Instant.now().toEpochMilli();
+        this.traceId = TraceContext.getTraceId();
+    }
 
     public static <T> Result<T> ok(T data) {
         Result<T> result = new Result<>();
-        result.setSuccess(true);
-        result.setCode("OK");
-        result.setMessage("success");
-        result.setData(data);
+        result.success = true;
+        result.code = ErrorCode.SUCCESS;
+        result.message = "success";
+        result.data = data;
         return result;
+    }
+
+    public static <T> Result<T> ok() {
+        return ok(null);
     }
 
     public static <T> Result<T> fail(String code, String message) {
         Result<T> result = new Result<>();
-        result.setSuccess(false);
-        result.setCode(code);
-        result.setMessage(message);
+        result.success = false;
+        result.code = code;
+        result.message = message;
+        result.data = null;
         return result;
     }
 
@@ -28,31 +47,24 @@ public class Result<T> {
         return success;
     }
 
-    public void setSuccess(boolean success) {
-        this.success = success;
-    }
-
     public String getCode() {
         return code;
-    }
-
-    public void setCode(String code) {
-        this.code = code;
     }
 
     public String getMessage() {
         return message;
     }
 
-    public void setMessage(String message) {
-        this.message = message;
-    }
-
     public T getData() {
         return data;
     }
 
-    public void setData(T data) {
-        this.data = data;
+    public String getTraceId() {
+        return traceId;
+    }
+
+    public long getTimestamp() {
+        return timestamp;
     }
 }
+
