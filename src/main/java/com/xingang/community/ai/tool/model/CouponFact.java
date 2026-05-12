@@ -4,7 +4,23 @@ public class CouponFact {
 
     private Long voucherId;
     private String title;
+    /**
+     * Estimated savings in fen when actualValue >= payValue.
+     * Kept for backward compatibility; prefer payValue/actualValue/valueDescription.
+     */
     private Integer discountAmount;
+    /**
+     * Amount user needs to pay, unit: fen.
+     */
+    private Long payValue;
+    /**
+     * Face value / actual voucher value, unit: fen.
+     */
+    private Long actualValue;
+    /**
+     * Human-readable value semantics, avoiding ambiguous discount interpretation.
+     */
+    private String valueDescription;
     private Integer stock;
     private String validTimeRange;
 
@@ -30,6 +46,30 @@ public class CouponFact {
 
     public void setDiscountAmount(Integer discountAmount) {
         this.discountAmount = discountAmount;
+    }
+
+    public Long getPayValue() {
+        return payValue;
+    }
+
+    public void setPayValue(Long payValue) {
+        this.payValue = payValue;
+    }
+
+    public Long getActualValue() {
+        return actualValue;
+    }
+
+    public void setActualValue(Long actualValue) {
+        this.actualValue = actualValue;
+    }
+
+    public String getValueDescription() {
+        return valueDescription;
+    }
+
+    public void setValueDescription(String valueDescription) {
+        this.valueDescription = valueDescription;
     }
 
     public Integer getStock() {

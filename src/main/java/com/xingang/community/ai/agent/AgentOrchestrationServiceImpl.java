@@ -253,7 +253,10 @@ public class AgentOrchestrationServiceImpl implements AgentOrchestrationService 
         parts.add("已完成意图规划：" + plan.getIntent() + "。");
         parts.add("工具调用次数：" + toolTrace.size() + "。");
         parts.add("知识命中条数：" + retrievalHits.size() + "。");
-        parts.add("当前阶段返回的是AI Agent骨架结果，后续会接入真实业务Service返回门店、优惠券等动态事实。");
+        parts.add("价格、优惠券、距离、营业状态等动态事实来自Tool/Service查询结果。");
+        if (!retrievalHits.isEmpty()) {
+            parts.add("平台规则与客服说明由RAG命中内容补充。");
+        }
         return String.join("", parts);
     }
 

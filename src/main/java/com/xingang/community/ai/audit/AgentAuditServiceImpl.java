@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.connection.stream.RecordId;
 import org.springframework.data.redis.connection.stream.StreamRecords;
@@ -16,10 +17,12 @@ import java.util.Map;
 public class AgentAuditServiceImpl implements AgentAuditService {
 
     private static final Logger log = LoggerFactory.getLogger(AgentAuditServiceImpl.class);
-    private static final String AUDIT_STREAM_KEY = "hmdp:agent:audit";
 
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
+
+    @Value("${ai.audit.stream-key:hmdp:agent:audit}")
+    private String auditStreamKey;
 
     public AgentAuditServiceImpl(StringRedisTemplate stringRedisTemplate, ObjectMapper objectMapper) {
         this.stringRedisTemplate = stringRedisTemplate;
@@ -42,8 +45,8 @@ public class AgentAuditServiceImpl implements AgentAuditService {
 
         try {
             RecordId recordId = stringRedisTemplate.opsForStream()
-                    .add(StreamRecords.string(payload).withStreamKey(AUDIT_STREAM_KEY));
-            log.debug("agent audit published: stream={}, id={}", AUDIT_STREAM_KEY, recordId);
+                    .add(StreamRecords.string(payload).withStreamKey(auditStreamKey));
+            log.debug("agent audit published: stream={}, id={}", auditStreamKey, recordId);
         } catch (RuntimeException ex) {
             log.error("agent audit publish failed, traceId={}", record.getTraceId(), ex);
         }
