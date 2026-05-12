@@ -8,6 +8,11 @@ out/
 .vscode/
 *.iml
 
+# Local agent / skill tool state
+.agents/
+.claude/skills/
+skills-lock.json
+
 # Logs
 *.log
 logs/
@@ -25,4 +30,3 @@ application-secret.yml
 
 # Maven wrapper generated files
 .mvn/wrapper/maven-wrapper.jar
-
