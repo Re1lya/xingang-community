@@ -32,11 +32,18 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 public class LocalLifeAgentToolsImpl implements LocalLifeAgentTools {
 
     private static final Logger log = LoggerFactory.getLogger(LocalLifeAgentToolsImpl.class);
+    private static final int SHOP_ID_PRIORITY_NONE = 0;
+    private static final int SHOP_ID_PRIORITY_SEARCH = 1;
+    private static final int SHOP_ID_PRIORITY_RECOMMEND = 2;
+    private static final int SHOP_ID_PRIORITY_EXPLICIT = 3;
+    private static final Pattern EXPLICIT_SHOP_ID_PATTERN = Pattern.compile("(?:shop\\s*id|shopId|shop_id|商户\\s*id|店铺\\s*id|店铺ID|商户ID)\\s*[:：=]?\\s*(\\d+)");
 
     private final ShopService shopService;
     private final VoucherService voucherService;
@@ -178,6 +185,7 @@ public class LocalLifeAgentToolsImpl implements LocalLifeAgentTools {
         if (plan == null || CollectionUtils.isEmpty(plan.getPreferredTools())) {
             return traces;
         }
+        SelectedShopContext selectedShopContext = initSelectedShopContext(request);
         for (String toolName : plan.getPreferredTools()) {
             long start = System.currentTimeMillis();
             AgentToolTrace trace = new AgentToolTrace();
@@ -186,43 +194,89 @@ public class LocalLifeAgentToolsImpl implements LocalLifeAgentTools {
             trace.setSuccess(true);
             trace.setErrorCode(null);
             switch (toolName) {
-                case TOOL_SEARCH_SHOPS -> trace.setOutputSize(
-                        searchShops(request.getMessage(), plan.getIncludedCategories(), plan.getCity(), 10).getOutputSize()
-                );
-                case TOOL_GET_SHOP_DETAIL -> trace.setOutputSize(getShopDetail(null).getOutputSize());
-                case TOOL_GET_SHOP_COUPONS -> trace.setOutputSize(getShopCoupons(null).getOutputSize());
+                case TOOL_SEARCH_SHOPS -> {
+                    ToolCallEnvelope<List<ShopCandidate>> envelope = searchShops(
+                            request.getMessage(), plan.getIncludedCategories(), plan.getCity(), 10
+                    );
+                    trace.setOutputSize(envelope.getOutputSize());
+                    selectedShopContext = updateSelectedShopContext(
+                            selectedShopContext,
+                            extractTopShopId(envelope),
+                            SHOP_ID_PRIORITY_SEARCH
+                    );
+                }
+                case TOOL_GET_SHOP_DETAIL -> {
+                    ToolCallEnvelope<ShopDetailFact> envelope = getShopDetail(selectedShopContext.shopId());
+                    trace.setOutputSize(envelope.getOutputSize());
+                    if (selectedShopContext.shopId() == null) {
+                        trace.setSuccess(false);
+                        trace.setErrorCode("SHOP_ID_MISSING");
+                    }
+                }
+                case TOOL_GET_SHOP_COUPONS -> {
+                    ToolCallEnvelope<List<CouponFact>> envelope = getShopCoupons(selectedShopContext.shopId());
+                    trace.setOutputSize(envelope.getOutputSize());
+                    if (selectedShopContext.shopId() == null) {
+                        trace.setSuccess(false);
+                        trace.setErrorCode("SHOP_ID_MISSING");
+                    }
+                }
                 case TOOL_GET_HOT_BLOGS -> {
                     trace.setOutputSize(getHotBlogs(plan.getCity(), 5).getOutputSize());
                     trace.setSuccess(false);
                     trace.setErrorCode("BLOG_SERVICE_NOT_READY");
                 }
                 case TOOL_GET_CURRENT_USER_LOCATION -> trace.setOutputSize(getCurrentUserLocation(userId, principalKey).getOutputSize());
-                case TOOL_RECOMMEND_SHOPS -> trace.setOutputSize(recommendShops(
-                        plan.getCity(),
-                        plan.getScenePreference(),
-                        plan.getBudgetMax(),
-                        plan.getPartySize(),
-                        plan.getIncludedCategories(),
-                        plan.getExcludedCategories()
-                ).getOutputSize());
-                case TOOL_RECOMMEND_SHOPS_V2 -> trace.setOutputSize(recommendShopsV2(
-                        plan.getCity(),
-                        plan.getLocationHint(),
-                        request.getLongitude(),
-                        request.getLatitude(),
-                        plan.getBudgetMax(),
-                        plan.getPartySize(),
-                        plan.getIncludedCategories(),
-                        plan.getExcludedCategories()
-                ).getOutputSize());
-                case TOOL_RECOMMEND_NEARBY_SHOPS -> trace.setOutputSize(recommendNearbyShops(
-                        plan.getCity(),
-                        request.getLongitude(),
-                        request.getLatitude(),
-                        3000,
-                        plan.getBudgetMax(),
-                        plan.getExcludedCategories()
-                ).getOutputSize());
+                case TOOL_RECOMMEND_SHOPS -> {
+                    ToolCallEnvelope<List<ShopCandidate>> envelope = recommendShops(
+                            plan.getCity(),
+                            plan.getScenePreference(),
+                            plan.getBudgetMax(),
+                            plan.getPartySize(),
+                            plan.getIncludedCategories(),
+                            plan.getExcludedCategories()
+                    );
+                    trace.setOutputSize(envelope.getOutputSize());
+                    selectedShopContext = updateSelectedShopContext(
+                            selectedShopContext,
+                            extractTopShopId(envelope),
+                            SHOP_ID_PRIORITY_RECOMMEND
+                    );
+                }
+                case TOOL_RECOMMEND_SHOPS_V2 -> {
+                    ToolCallEnvelope<RecommendationResult> envelope = recommendShopsV2(
+                            plan.getCity(),
+                            plan.getLocationHint(),
+                            request.getLongitude(),
+                            request.getLatitude(),
+                            plan.getBudgetMax(),
+                            plan.getPartySize(),
+                            plan.getIncludedCategories(),
+                            plan.getExcludedCategories()
+                    );
+                    trace.setOutputSize(envelope.getOutputSize());
+                    selectedShopContext = updateSelectedShopContext(
+                            selectedShopContext,
+                            extractTopShopId(envelope),
+                            SHOP_ID_PRIORITY_RECOMMEND
+                    );
+                }
+                case TOOL_RECOMMEND_NEARBY_SHOPS -> {
+                    ToolCallEnvelope<List<ShopCandidate>> envelope = recommendNearbyShops(
+                            plan.getCity(),
+                            request.getLongitude(),
+                            request.getLatitude(),
+                            3000,
+                            plan.getBudgetMax(),
+                            plan.getExcludedCategories()
+                    );
+                    trace.setOutputSize(envelope.getOutputSize());
+                    selectedShopContext = updateSelectedShopContext(
+                            selectedShopContext,
+                            extractTopShopId(envelope),
+                            SHOP_ID_PRIORITY_RECOMMEND
+                    );
+                }
                 default -> {
                     trace.setSuccess(false);
                     trace.setErrorCode("TOOL_UNSUPPORTED");
@@ -286,18 +340,24 @@ public class LocalLifeAgentToolsImpl implements LocalLifeAgentTools {
         CouponFact fact = new CouponFact();
         fact.setVoucherId(voucher.getId());
         fact.setTitle(voucher.getTitle());
-        fact.setDiscountAmount(resolveDiscount(voucher.getPayValue(), voucher.getActualValue()));
+        fact.setPayValue(voucher.getPayValue());
+        fact.setActualValue(voucher.getActualValue());
+        fact.setDiscountAmount(resolveEstimatedSavings(voucher.getPayValue(), voucher.getActualValue()));
+        fact.setValueDescription(buildVoucherValueDescription(voucher.getPayValue(), voucher.getActualValue()));
         fact.setStock(voucher.getStock());
         fact.setValidTimeRange(buildVoucherRange(voucher));
         return fact;
     }
 
-    private int resolveDiscount(Long payValue, Long actualValue) {
+    private Integer resolveEstimatedSavings(Long payValue, Long actualValue) {
         if (payValue == null || actualValue == null) {
-            return 0;
+            return null;
         }
-        long discount = payValue - actualValue;
-        return (int) Math.max(discount, 0);
+        if (actualValue < payValue) {
+            return null;
+        }
+        long savings = actualValue - payValue;
+        return (int) Math.min(savings, Integer.MAX_VALUE);
     }
 
     private String buildVoucherRange(VoucherVO voucher) {
@@ -305,6 +365,13 @@ public class LocalLifeAgentToolsImpl implements LocalLifeAgentTools {
             return "N/A";
         }
         return voucher.getBeginTime() + " ~ " + voucher.getEndTime();
+    }
+
+    private String buildVoucherValueDescription(Long payValue, Long actualValue) {
+        if (payValue == null || actualValue == null) {
+            return "金额信息不完整";
+        }
+        return "payValue(应付,分)=" + payValue + ", actualValue(券面价值,分)=" + actualValue;
     }
 
     private String resolveBusinessStatus(String openHours) {
@@ -337,6 +404,70 @@ public class LocalLifeAgentToolsImpl implements LocalLifeAgentTools {
 
     private double roundTo3(double value) {
         return Math.round(value * 1000D) / 1000D;
+    }
+
+    private SelectedShopContext initSelectedShopContext(AgentChatRequest request) {
+        Long explicitShopId = extractUserExplicitShopId(request);
+        if (explicitShopId != null) {
+            return new SelectedShopContext(explicitShopId, SHOP_ID_PRIORITY_EXPLICIT);
+        }
+        return new SelectedShopContext(null, SHOP_ID_PRIORITY_NONE);
+    }
+
+    private SelectedShopContext updateSelectedShopContext(SelectedShopContext current,
+                                                          Long candidateShopId,
+                                                          int candidatePriority) {
+        if (candidateShopId == null) {
+            return current;
+        }
+        if (current.shopId() == null || candidatePriority > current.priority()) {
+            return new SelectedShopContext(candidateShopId, candidatePriority);
+        }
+        return current;
+    }
+
+    private Long extractTopShopId(ToolCallEnvelope<List<ShopCandidate>> envelope) {
+        if (envelope == null) {
+            return null;
+        }
+        return extractTopShopId(envelope.getData());
+    }
+
+    private Long extractTopShopId(ToolCallEnvelope<RecommendationResult> envelope) {
+        if (envelope == null || envelope.getData() == null) {
+            return null;
+        }
+        return extractTopShopId(envelope.getData().getCandidates());
+    }
+
+    private Long extractTopShopId(List<ShopCandidate> candidates) {
+        if (CollectionUtils.isEmpty(candidates)) {
+            return null;
+        }
+        return candidates.stream()
+                .map(ShopCandidate::getShopId)
+                .filter(shopId -> shopId != null && shopId > 0)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private Long extractUserExplicitShopId(AgentChatRequest request) {
+        if (request == null || !StringUtils.hasText(request.getMessage())) {
+            return null;
+        }
+        Matcher matcher = EXPLICIT_SHOP_ID_PATTERN.matcher(request.getMessage());
+        if (!matcher.find()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(matcher.group(1));
+        } catch (NumberFormatException ex) {
+            log.warn("invalid explicit shopId in user message: {}", request.getMessage(), ex);
+            return null;
+        }
+    }
+
+    private record SelectedShopContext(Long shopId, int priority) {
     }
 
     private Map<String, Object> buildTraceInput(AgentExecutionPlan plan, AgentChatRequest request) {

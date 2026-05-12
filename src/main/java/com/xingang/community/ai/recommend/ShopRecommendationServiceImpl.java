@@ -5,6 +5,8 @@ import com.xingang.community.shop.service.ShopService;
 import com.xingang.community.vo.ShopTypeVO;
 import com.xingang.community.vo.ShopVO;
 import com.xingang.community.voucher.service.VoucherService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
@@ -20,7 +22,9 @@ import java.util.stream.Collectors;
 @Service
 public class ShopRecommendationServiceImpl implements ShopRecommendationService {
 
+    private static final Logger log = LoggerFactory.getLogger(ShopRecommendationServiceImpl.class);
     private static final int DEFAULT_LIMIT = 20;
+    private static final int YUAN_TO_FEN = 100;
 
     private final ShopService shopService;
     private final VoucherService voucherService;
@@ -37,10 +41,12 @@ public class ShopRecommendationServiceImpl implements ShopRecommendationService 
                                          Integer partySize,
                                          List<String> includedCategories,
                                          List<String> excludedCategories) {
+        // budgetMax from planner is yuan; shop.avgPrice in DB is fen.
+        Integer budgetMaxFen = normalizeBudgetFen(budgetMax);
         Map<Long, String> typeNameMap = resolveTypeNameMap();
         List<Long> typeIds = resolveTargetTypeIds(typeNameMap, includedCategories, excludedCategories);
         List<ShopVO> shops = queryShopsByTypeIds(typeIds, null, null, DEFAULT_LIMIT);
-        return buildCandidates(shops, typeNameMap, city, budgetMax, DEFAULT_LIMIT);
+        return buildCandidates(shops, typeNameMap, city, budgetMaxFen, DEFAULT_LIMIT);
     }
 
     @Override
@@ -50,10 +56,12 @@ public class ShopRecommendationServiceImpl implements ShopRecommendationService 
                                                Integer radiusMeters,
                                                Integer budgetMax,
                                                List<String> excludedCategories) {
+        // budgetMax from planner is yuan; shop.avgPrice in DB is fen.
+        Integer budgetMaxFen = normalizeBudgetFen(budgetMax);
         Map<Long, String> typeNameMap = resolveTypeNameMap();
         List<Long> typeIds = resolveTargetTypeIds(typeNameMap, List.of(), excludedCategories);
         List<ShopVO> shops = queryShopsByTypeIds(typeIds, longitude, latitude, DEFAULT_LIMIT);
-        return buildNearbyCandidates(shops, typeNameMap, city, budgetMax, radiusMeters, DEFAULT_LIMIT);
+        return buildNearbyCandidates(shops, typeNameMap, city, budgetMaxFen, radiusMeters, DEFAULT_LIMIT);
     }
 
     private Map<Long, String> resolveTypeNameMap() {
@@ -105,12 +113,12 @@ public class ShopRecommendationServiceImpl implements ShopRecommendationService 
     private List<ShopCandidate> buildCandidates(List<ShopVO> shops,
                                                 Map<Long, String> typeNameMap,
                                                 String city,
-                                                Integer budgetMax,
+                                                Integer budgetMaxFen,
                                                 int limit) {
         Map<Long, Boolean> couponIndex = buildCouponIndex(shops);
         return shops.stream()
                 .filter(shop -> matchesCity(shop, city))
-                .filter(shop -> withinBudget(shop, budgetMax))
+                .filter(shop -> withinBudget(shop, budgetMaxFen))
                 .sorted(Comparator
                         .comparingInt((ShopVO shop) -> couponIndex.getOrDefault(shop.getId(), false) ? 1 : 0)
                         .reversed()
@@ -124,13 +132,13 @@ public class ShopRecommendationServiceImpl implements ShopRecommendationService 
     private List<ShopCandidate> buildNearbyCandidates(List<ShopVO> shops,
                                                       Map<Long, String> typeNameMap,
                                                       String city,
-                                                      Integer budgetMax,
+                                                      Integer budgetMaxFen,
                                                       Integer radiusMeters,
                                                       int limit) {
         Map<Long, Boolean> couponIndex = buildCouponIndex(shops);
         return shops.stream()
                 .filter(shop -> matchesCity(shop, city))
-                .filter(shop -> withinBudget(shop, budgetMax))
+                .filter(shop -> withinBudget(shop, budgetMaxFen))
                 .filter(shop -> withinRadius(shop, radiusMeters))
                 .sorted(Comparator
                         .comparing(ShopVO::getDistance, Comparator.nullsLast(Double::compareTo))
@@ -160,11 +168,11 @@ public class ShopRecommendationServiceImpl implements ShopRecommendationService 
                 || containsIgnoreCase(shop.getName(), city);
     }
 
-    private boolean withinBudget(ShopVO shop, Integer budgetMax) {
-        if (budgetMax == null || budgetMax <= 0) {
+    private boolean withinBudget(ShopVO shop, Integer budgetMaxFen) {
+        if (budgetMaxFen == null || budgetMaxFen <= 0) {
             return true;
         }
-        return shop.getAvgPrice() != null && shop.getAvgPrice() <= budgetMax;
+        return shop.getAvgPrice() != null && shop.getAvgPrice() <= budgetMaxFen;
     }
 
     private boolean withinRadius(ShopVO shop, Integer radiusMeters) {
@@ -203,5 +211,26 @@ public class ShopRecommendationServiceImpl implements ShopRecommendationService 
 
     private double roundTo3(double value) {
         return Math.round(value * 1000D) / 1000D;
+    }
+
+    /**
+     * Converts planner budget from yuan to fen in a single place.
+     * Returns null for null/non-positive/overflow values to avoid invalid filtering.
+     */
+    private Integer normalizeBudgetFen(Integer budgetMaxYuan) {
+        if (budgetMaxYuan == null || budgetMaxYuan <= 0) {
+            return null;
+        }
+        try {
+            long budgetFen = Math.multiplyExact(budgetMaxYuan.longValue(), YUAN_TO_FEN);
+            if (budgetFen > Integer.MAX_VALUE) {
+                log.warn("Budget overflow, ignore budget filter: budgetMaxYuan={}", budgetMaxYuan);
+                return null;
+            }
+            return (int) budgetFen;
+        } catch (ArithmeticException ex) {
+            log.warn("Invalid budget input, ignore budget filter: budgetMaxYuan={}", budgetMaxYuan, ex);
+            return null;
+        }
     }
 }
