@@ -17,13 +17,14 @@ import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.data.domain.Range;
 import org.springframework.data.redis.connection.stream.*;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -171,18 +172,35 @@ public class VoucherOrderServiceImpl implements VoucherOrderService {
     // ==================== Stream 消费组初始化 ====================
 
     /**
-     * 初始化Redis Stream消费组。
+     * 初始化Redis Stream消费组，使用 XGROUP CREATE ... MKSTREAM。
+     *
+     * <p>MKSTREAM 确保空 Stream 情况下也能创建消费组，
+     * 不会写入业务订单假消息。</p>
+     *
+     * <p>消费组已存在（BUSYGROUP）时可安全忽略；
+     * 其他异常（网络、权限等）必须抛出 {@link IllegalStateException}，避免服务假启动。</p>
      */
     private void initStreamConsumerGroup() {
+        String streamKey = RedisConstants.STREAM_ORDERS_KEY;
         try {
-            stringRedisTemplate.opsForStream().createGroup(
-                    RedisConstants.STREAM_ORDERS_KEY,
-                    ReadOffset.from("0"),
-                    STREAM_CONSUMER_GROUP
+            stringRedisTemplate.execute((RedisCallback<String>) connection ->
+                    connection.streamCommands().xGroupCreate(
+                            streamKey.getBytes(StandardCharsets.UTF_8),
+                            STREAM_CONSUMER_GROUP,
+                            ReadOffset.from("0"),
+                            true  // MKSTREAM：Stream 不存在时自动创建
+                    )
             );
-            log.info("Stream consumer group created: {} → {}", RedisConstants.STREAM_ORDERS_KEY, STREAM_CONSUMER_GROUP);
+            log.info("Stream consumer group created: {} → {}", streamKey, STREAM_CONSUMER_GROUP);
         } catch (Exception e) {
-            log.info("Stream consumer group may already exist: {}", e.getMessage());
+            String msg = e.getMessage();
+            if (msg != null && msg.contains("BUSYGROUP")) {
+                log.info("Stream consumer group already exists: {} → {}", streamKey, STREAM_CONSUMER_GROUP);
+            } else {
+                log.error("Failed to create stream consumer group: {} → {}", streamKey, STREAM_CONSUMER_GROUP, e);
+                throw new IllegalStateException(
+                        "Failed to initialize Redis Stream consumer group: " + streamKey + " → " + STREAM_CONSUMER_GROUP, e);
+            }
         }
     }
 
@@ -229,9 +247,11 @@ public class VoucherOrderServiceImpl implements VoucherOrderService {
 
     /**
      * 处理单条Stream消息。
-     * 异常时消息保留在pending-list，不ACK。
+     *
+     * @return true 表示事务创建成功且 ACK 成功（ACK 返回值 > 0）；
+     *         false 表示获取锁失败、事务失败或 ACK 失败，消息仍保留在 pending-list
      */
-    private void processSingleMessage(MapRecord<String, Object, Object> record) {
+    private boolean processSingleMessage(MapRecord<String, Object, Object> record) {
         Map<Object, Object> body = record.getValue();
         String orderId = String.valueOf(body.get("orderId"));
         String userId = String.valueOf(body.get("userId"));
@@ -245,27 +265,33 @@ public class VoucherOrderServiceImpl implements VoucherOrderService {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.warn("Lock interrupted: key={}", lockKey);
-            return;
+            return false;
         }
 
         if (!locked) {
             log.warn("Failed to acquire lock, pending-list will retry: key={}", lockKey);
-            return; // 不ACK，消息留在pending-list
+            return false;
         }
 
         try {
             voucherOrderTransactionService.createOrderInTransaction(
                     Long.valueOf(orderId), Long.valueOf(userId), Long.valueOf(voucherId));
 
-            stringRedisTemplate.opsForStream().acknowledge(
+            Long ack = stringRedisTemplate.opsForStream().acknowledge(
                     RedisConstants.STREAM_ORDERS_KEY,
                     STREAM_CONSUMER_GROUP,
                     record.getId().getValue()
             );
-            log.info("Order created and acked: orderId={}", orderId);
+            if (ack != null && ack > 0) {
+                log.info("Order created and acked: orderId={}", orderId);
+                return true;
+            } else {
+                log.error("ACK returned {} for orderId={}, message stays in pending-list", ack, orderId);
+                return false;
+            }
         } catch (Exception e) {
             log.error("Order creation failed, message stays in pending-list: orderId={}", orderId, e);
-            // 不ACK，后续pending-list恢复处理
+            return false;
         } finally {
             if (lock.isHeldByCurrentThread()) {
                 lock.unlock();
@@ -291,7 +317,6 @@ public class VoucherOrderServiceImpl implements VoucherOrderService {
 
             log.info("Found {} pending messages, attempting recovery", total);
 
-            // 读取pending消息（每次处理一批，最多10条）
             List<MapRecord<String, Object, Object>> pendingRecords = stringRedisTemplate.opsForStream()
                     .read(
                             Consumer.from(STREAM_CONSUMER_GROUP, STREAM_CONSUMER_NAME),
@@ -303,8 +328,14 @@ public class VoucherOrderServiceImpl implements VoucherOrderService {
                 return;
             }
 
+            int recovered = 0;
             for (MapRecord<String, Object, Object> record : pendingRecords) {
-                processSingleMessage(record);
+                if (processSingleMessage(record)) {
+                    recovered++;
+                }
+            }
+            if (recovered > 0) {
+                log.info("Pending recovery processed: {}/{} messages acked", recovered, pendingRecords.size());
             }
         } catch (Exception e) {
             log.error("Pending-list processing error", e);
@@ -314,7 +345,7 @@ public class VoucherOrderServiceImpl implements VoucherOrderService {
     /**
      * 手动触发pending-list处理（供外部调用，如管理接口或定时任务）。
      *
-     * @return 已处理的消息数
+     * @return 成功处理并 ACK 的消息数（只有 ACK 返回值 > 0 才计入）
      */
     @Override
     public int handlePendingList() {
@@ -338,8 +369,9 @@ public class VoucherOrderServiceImpl implements VoucherOrderService {
 
             if (pendingRecords != null) {
                 for (MapRecord<String, Object, Object> record : pendingRecords) {
-                    processSingleMessage(record);
-                    processed++;
+                    if (processSingleMessage(record)) {
+                        processed++;
+                    }
                 }
             }
         } catch (Exception e) {
