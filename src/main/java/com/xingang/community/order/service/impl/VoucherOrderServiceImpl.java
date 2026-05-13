@@ -17,6 +17,7 @@ import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.data.domain.Range;
 import org.springframework.data.redis.connection.stream.*;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -27,6 +28,7 @@ import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -85,6 +87,8 @@ public class VoucherOrderServiceImpl implements VoucherOrderService {
 
     private static final String STREAM_CONSUMER_GROUP = "order-group";
     private static final String STREAM_CONSUMER_NAME = "order-consumer-1";
+
+    private static final int MAX_DELIVERY_COUNT = 3;
 
     private volatile boolean consumerRunning = true;
 
@@ -302,7 +306,7 @@ public class VoucherOrderServiceImpl implements VoucherOrderService {
     // ==================== Pending-list 处理 ====================
 
     /**
-     * 基础pending-list处理：读取pending消息并尝试重新执行订单创建。
+     * 基础pending-list处理：先路由超限消息到死信队列，再对剩余消息尝试订单创建。
      *
      * <p>在消费者空闲时自动触发，也可通过外部调用手动触发。</p>
      */
@@ -317,6 +321,10 @@ public class VoucherOrderServiceImpl implements VoucherOrderService {
 
             log.info("Found {} pending messages, attempting recovery", total);
 
+            // 1. 先将超过最大投递次数的消息路由到死信队列
+            int routedToDlq = routeExpiredToDeadLetter();
+
+            // 2. 读取剩余pending消息并重试
             List<MapRecord<String, Object, Object>> pendingRecords = stringRedisTemplate.opsForStream()
                     .read(
                             Consumer.from(STREAM_CONSUMER_GROUP, STREAM_CONSUMER_NAME),
@@ -334,8 +342,9 @@ public class VoucherOrderServiceImpl implements VoucherOrderService {
                     recovered++;
                 }
             }
-            if (recovered > 0) {
-                log.info("Pending recovery processed: {}/{} messages acked", recovered, pendingRecords.size());
+            if (recovered > 0 || routedToDlq > 0) {
+                log.info("Pending recovery: {}/{} acked, {} routed to DLQ",
+                        recovered, pendingRecords.size(), routedToDlq);
             }
         } catch (Exception e) {
             log.error("Pending-list processing error", e);
@@ -358,6 +367,8 @@ public class VoucherOrderServiceImpl implements VoucherOrderService {
             return 0;
         }
 
+        // 先路由超限消息到死信队列
+        int routedToDlq = routeExpiredToDeadLetter();
         int processed = 0;
         try {
             List<MapRecord<String, Object, Object>> pendingRecords = stringRedisTemplate.opsForStream()
@@ -377,7 +388,85 @@ public class VoucherOrderServiceImpl implements VoucherOrderService {
         } catch (Exception e) {
             log.error("Manual pending-list processing error", e);
         }
+        log.info("Manual pending result: {} acked, {} routed to DLQ", processed, routedToDlq);
         return processed;
+    }
+
+    // ==================== 死信队列路由 ====================
+
+    /**
+     * 扫描pending-list，将投递次数达到 {@link #MAX_DELIVERY_COUNT} 的消息
+     * 写入死信队列 {@code stream.orders.dlq} 并 ACK 原消息。
+     *
+     * <h3>防误丢设计</h3>
+     * <ol>
+     *   <li>仅检查 deliveryCount >= MAX_DELIVERY_COUNT，正常消息不受影响</li>
+     *   <li>先 XADD 到 DLQ Stream，成功后才 XACK 原消息</li>
+     *   <li>DLQ 保留完整原始字段（orderId/userId/voucherId）+ 失败元信息</li>
+     *   <li>XADD 失败时消息留在 pending-list，记录 ERROR 日志</li>
+     * </ol>
+     *
+     * @return 本次路由到死信队列的消息数
+     */
+    private int routeExpiredToDeadLetter() {
+        int routed = 0;
+        try {
+            PendingMessages pendingMessages = stringRedisTemplate.opsForStream()
+                    .pending(RedisConstants.STREAM_ORDERS_KEY, STREAM_CONSUMER_GROUP,
+                            Range.open("-", "+"), 50);
+
+            for (PendingMessage pm : pendingMessages) {
+                if (pm.getTotalDeliveryCount() < MAX_DELIVERY_COUNT) {
+                    continue;
+                }
+
+                // 通过 XRANGE 只读读取消息体（不影响 pending 状态）
+                List<MapRecord<String, Object, Object>> records = stringRedisTemplate.opsForStream()
+                        .range(RedisConstants.STREAM_ORDERS_KEY,
+                                Range.closed(pm.getId().getValue(), pm.getId().getValue()));
+
+                if (records == null || records.isEmpty()) {
+                    log.warn("DLQ route: body not found for messageId={}, skip", pm.getId().getValue());
+                    continue;
+                }
+
+                Map<Object, Object> body = records.get(0).getValue();
+
+                // 构建DLQ消息体：原始字段 + 失败元信息
+                Map<String, String> dlqBody = new LinkedHashMap<>();
+                dlqBody.put("orderId", String.valueOf(body.getOrDefault("orderId", "")));
+                dlqBody.put("userId", String.valueOf(body.getOrDefault("userId", "")));
+                dlqBody.put("voucherId", String.valueOf(body.getOrDefault("voucherId", "")));
+                dlqBody.put("originalMessageId", pm.getId().getValue());
+                dlqBody.put("failureReason", "MAX_DELIVERY_EXCEEDED");
+                dlqBody.put("deliveryCount", String.valueOf(pm.getTotalDeliveryCount()));
+                dlqBody.put("movedAt", LocalDateTime.now().toString());
+
+                // 先写DLQ，成功后再ACK原消息
+                try {
+                    RecordId dlqId = stringRedisTemplate.opsForStream()
+                            .add(RedisConstants.STREAM_ORDERS_DLQ_KEY, dlqBody);
+
+                    if (dlqId != null) {
+                        stringRedisTemplate.opsForStream()
+                                .acknowledge(RedisConstants.STREAM_ORDERS_KEY,
+                                        STREAM_CONSUMER_GROUP, pm.getId().getValue());
+                        routed++;
+                        log.warn("Routed to DLQ: originalId={}, dlqId={}, deliveryCount={}",
+                                pm.getId().getValue(), dlqId.getValue(), pm.getTotalDeliveryCount());
+                    } else {
+                        log.error("DLQ XADD returned null for messageId={}, message kept in pending",
+                                pm.getId().getValue());
+                    }
+                } catch (Exception e) {
+                    log.error("DLQ route failed for messageId={}, message kept in pending",
+                            pm.getId().getValue(), e);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Dead-letter routing scan error", e);
+        }
+        return routed;
     }
 
     // ==================== 辅助方法 ====================
