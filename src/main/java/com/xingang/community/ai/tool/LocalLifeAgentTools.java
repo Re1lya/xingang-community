@@ -1,7 +1,6 @@
 package com.xingang.community.ai.tool;
 
 import com.xingang.community.ai.agent.dto.AgentChatRequest;
-import com.xingang.community.ai.agent.dto.AgentToolTrace;
 import com.xingang.community.ai.planning.AgentExecutionPlan;
 import com.xingang.community.ai.tool.model.BlogFact;
 import com.xingang.community.ai.tool.model.CouponFact;
@@ -9,6 +8,7 @@ import com.xingang.community.ai.tool.model.RecommendationResult;
 import com.xingang.community.ai.tool.model.ShopCandidate;
 import com.xingang.community.ai.tool.model.ShopDetailFact;
 import com.xingang.community.ai.tool.model.ToolCallEnvelope;
+import com.xingang.community.ai.tool.model.ToolExecutionSnapshot;
 import com.xingang.community.ai.tool.model.UserLocationFact;
 
 import java.util.List;
@@ -61,8 +61,8 @@ public interface LocalLifeAgentTools {
                                                                Integer budgetMax,
                                                                List<String> excludedCategories);
 
-    List<AgentToolTrace> executePreferredTools(AgentExecutionPlan plan,
-                                               AgentChatRequest request,
-                                               Long userId,
-                                               String principalKey);
+    ToolExecutionSnapshot executePreferredTools(AgentExecutionPlan plan,
+                                                AgentChatRequest request,
+                                                Long userId,
+                                                String principalKey);
 }
