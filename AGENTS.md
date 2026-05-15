@@ -10,34 +10,40 @@
 
 ### A. 当前项目状态
 
-截至 2026-05-13，项目处于第三阶段前端骨架 Review 修复期：
+截至 2026-05-15，项目处于第三阶段前端骨架 Review 修复后主分支同步期：
 
-1. `develop` 已完成第二阶段合并，当前稳定基线提交为：
+1. `develop` 已完成第二阶段合并、第三阶段前端骨架与 Review 修复，并已同步到本地 `main`。当前稳定基线提交为：
 
 ```text
-6da1d68 docs(plan): scaffold phase3 multi-agent development
+b5fbe02 develop开发中
 ```
 
-2. 第二阶段已合并内容：
+2. 本次主分支同步状态：
+   - `main` 已从 `094205b` 快进到 `b5fbe02`。
+   - 同步前在 `develop` 执行 `mvn -q -DskipTests compile` 通过。
+   - 同步后在 `main` 执行 `mvn -q -DskipTests compile` 通过。
+   - 当前仅同步已进入 `develop` 的稳定内容；未把尚未合入 `develop` 的 phase3 执行者分支直接并入 `main`。
+
+3. 第二阶段已合并内容：
    - DeepSeek 业务分支已合并：`eec3638 merge: integrate business phase2`
    - Copilot AI 分支已合并：`9260865 merge: integrate ai phase2`
    - 产品经理 AI 已完成集成修复：`d3e5fb2 chore(integration): finalize phase2 merge`
 
-3. 当前可继续开发的第三阶段分支：
+4. 当前可继续开发的第三阶段分支：
 
 ```text
-E:\javacode\xingang community             develop，产品经理集成、Review、文档维护
+E:\javacode\xingang community             main，当前本地已同步 develop；如继续集成开发需切回 develop
 E:\javacode\xingang-community-deepseek    feature/deepseek-business-phase3，DeepSeek业务可靠性方向
 E:\javacode\xingang-community-copilot     feature/copilot-ai-phase3，Copilot AI回答体验方向
 ```
 
-4. 第三阶段计划文档：
+5. 第三阶段计划文档：
 
 ```text
 docs/superpowers/plans/2026-05-12-phase3-development.md
 ```
 
-5. 前端开发规划文档：
+6. 前端开发规划文档：
 
 ```text
 新港社区前端开发文档.md
@@ -45,7 +51,7 @@ docs/superpowers/plans/2026-05-12-phase3-development.md
 
 说明：当前已确认并创建 `frontend/` 第一轮骨架，允许新增 React/Vite 前端依赖和构建脚本。Review 修复已要求首页改走真实 `/shop/of/type`、评分不再除以 10、分类暂用文档演示常量、AI 对话支持普通/流式切换、SSE fetch 复用登录态请求头、秒杀失败展示 `message` 和 `traceId`。前端开发应继续以 `新港社区前端开发文档.md` 为基准，不得伪造动态事实。
 
-6. 前端产品上下文：
+7. 前端产品上下文：
 
 ```text
 PRODUCT.md
@@ -53,15 +59,16 @@ PRODUCT.md
 
 说明：`PRODUCT.md` 是 `$impeccable` 使用的前端产品上下文文件，记录产品定位、用户、设计原则、反例和可访问性边界。后续改 UI 或新增前端页面时应保留并先读取。
 
-7. 当前验证状态：
+8. 当前验证状态：
 
 ```text
-develop                         mvn -q -DskipTests compile 通过
+main                            mvn -q -DskipTests compile 通过
+develop                         mvn -q -DskipTests compile 通过（同步 main 前验证）
 feature/deepseek-business-phase3 mvn -q -DskipTests compile 通过
 feature/copilot-ai-phase3        mvn -q -DskipTests compile 通过
 ```
 
-8. 当前重要边界：
+9. 当前重要边界：
    - 不再继续使用 `feature/deepseek-business-phase2` 和 `feature/copilot-ai-phase2` 开发。
    - 不得删除旧分支或 worktree，除非用户明确确认。
    - 第三阶段第一轮当前目标为前端工程落地基础骨架与 Review 修复；DeepSeek/Copilot 后端分支仍等待后续任务确认。
