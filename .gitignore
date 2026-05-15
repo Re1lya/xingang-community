@@ -2,6 +2,11 @@
 target/
 build/
 out/
+dist/
+frontend/dist/
+frontend/node_modules/
+frontend/.playwright-cli/
+frontend/*.tsbuildinfo
 
 # IDE / editor
 .idea/
@@ -10,6 +15,7 @@ out/
 
 # Local agent / skill tool state
 .agents/
+.superpowers/
 .claude/skills/
 skills-lock.json
 
