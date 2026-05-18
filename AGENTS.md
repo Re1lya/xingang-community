@@ -10,31 +10,33 @@
 
 ### A. 当前项目状态
 
-截至 2026-05-15，项目处于第三阶段前端骨架 Review 修复后主分支同步期：
+截至 2026-05-18，项目处于第三阶段后端可靠性与 AI 回答体验合并完成阶段：
 
-1. `develop` 已完成第二阶段合并、第三阶段前端骨架与 Review 修复，并已同步到本地 `main`。当前稳定基线提交为：
+1. `develop` 已完成第二阶段合并、第三阶段前端骨架与 Review 修复，并已合并第三阶段 DeepSeek / Copilot 后端增强。当前 `develop` 最新集成提交为：
 
 ```text
-b5fbe02 develop开发中
+b860b27 merge: integrate ai phase3 answer composer
 ```
 
-2. 本次主分支同步状态：
-   - `main` 已从 `094205b` 快进到 `b5fbe02`。
-   - 同步前在 `develop` 执行 `mvn -q -DskipTests compile` 通过。
-   - 同步后在 `main` 执行 `mvn -q -DskipTests compile` 通过。
-   - 当前仅同步已进入 `develop` 的稳定内容；未把尚未合入 `develop` 的 phase3 执行者分支直接并入 `main`。
+2. 本次 Review 与合并状态：
+   - `feature/deepseek-business-phase3` 已完成复审修复，最终提交为 `a9ec997 fix(business): harden seckill dlq ack and admin guard`。
+   - `feature/copilot-ai-phase3` 已完成复审修复，最终提交为 `9831da0 fix(agent): distinguish skipped tools from empty facts`。
+   - DeepSeek 分支已合并到 `develop`：`5e23e05 merge: integrate business phase3 reliability`。
+   - Copilot 分支已合并到 `develop`：`b860b27 merge: integrate ai phase3 answer composer`。
+   - 合并后在 `develop` 执行 `mvn -q -DskipTests compile` 通过。
+   - 下一步需要完成本次 `AGENTS.md` 状态记录提交，并按用户要求同步到 `main`。
 
 3. 第二阶段已合并内容：
    - DeepSeek 业务分支已合并：`eec3638 merge: integrate business phase2`
    - Copilot AI 分支已合并：`9260865 merge: integrate ai phase2`
    - 产品经理 AI 已完成集成修复：`d3e5fb2 chore(integration): finalize phase2 merge`
 
-4. 当前可继续开发的第三阶段分支：
+4. 当前工作区与分支：
 
 ```text
-E:\javacode\xingang community             main，当前本地已同步 develop；如继续集成开发需切回 develop
-E:\javacode\xingang-community-deepseek    feature/deepseek-business-phase3，DeepSeek业务可靠性方向
-E:\javacode\xingang-community-copilot     feature/copilot-ai-phase3，Copilot AI回答体验方向
+E:\javacode\xingang community             develop，当前集成分支，已合并 phase3 后端增强
+E:\javacode\xingang-community-deepseek    feature/deepseek-business-phase3，已合并，后续不继续在该任务上新增范围
+E:\javacode\xingang-community-copilot     feature/copilot-ai-phase3，已合并，后续不继续在该任务上新增范围
 ```
 
 5. 第三阶段计划文档：
@@ -62,16 +64,18 @@ PRODUCT.md
 8. 当前验证状态：
 
 ```text
-main                            mvn -q -DskipTests compile 通过
-develop                         mvn -q -DskipTests compile 通过（同步 main 前验证）
-feature/deepseek-business-phase3 mvn -q -DskipTests compile 通过
-feature/copilot-ai-phase3        mvn -q -DskipTests compile 通过
+develop                         mvn -q -DskipTests compile 通过（合并 DeepSeek 与 Copilot phase3 后验证）
+feature/deepseek-business-phase3 mvn -q -DskipTests compile 通过（复审修复后验证）
+feature/copilot-ai-phase3        mvn -q -DskipTests compile 通过（复审修复后验证）
 ```
 
 9. 当前重要边界：
    - 不再继续使用 `feature/deepseek-business-phase2` 和 `feature/copilot-ai-phase2` 开发。
    - 不得删除旧分支或 worktree，除非用户明确确认。
-   - 第三阶段第一轮当前目标为前端工程落地基础骨架与 Review 修复；DeepSeek/Copilot 后端分支仍等待后续任务确认。
+   - 第三阶段两个执行者分支已合并到 `develop`，后续新任务应另开新分支或让执行者先同步最新 `develop`。
+   - DeepSeek 已新增秒杀 pending-list / 库存可观测接口、DLQ 路由、ACK 结果校验和 `X-Admin-Token` 管理接口保护；`admin.token` 由 `${ADMIN_TOKEN:}` 注入，未配置时拒绝访问。
+   - Copilot 已新增 `ToolExecutionSnapshot` 与 `AnswerComposer`，最终回答可基于真实 Tool 事实组织内容，并区分“未执行 Tool”和“执行后为空”。
+   - 当前仍未实现 DLQ originalMessageId Redis Set 幂等去重、完整后台权限体系、完整 Agent 评估集和更自然的最终回答模板，这些属于后续增强。
 
 ### B. 产品经理 AI 固定工作流程
 
