@@ -77,3 +77,43 @@ CREATE TABLE IF NOT EXISTS `voucher_order` (
     UNIQUE KEY `uk_user_voucher` (`user_id`, `voucher_id`),
     KEY `idx_voucher_id` (`voucher_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='优惠券订单表';
+
+-- ============================================================================
+-- Redis Stream 结构说明（非SQL表，仅供运维参考）
+-- ============================================================================
+--
+-- stream.orders (秒杀订单主队列)
+--   消费组: order-group
+--   消费者: order-consumer-1 (Spring ThreadPoolTaskExecutor)
+--   消息体字段:
+--     orderId   - 雪花算法预生成的订单ID
+--     userId    - 用户ID
+--     voucherId - 秒杀券ID
+--
+-- stream.orders.dlq (死信队列)
+--   触发条件: 消息投递次数 >= 3 (deliveryCount >= MAX_DELIVERY_COUNT)
+--   写入时机: pending-list 处理前自动扫描路由
+--   消息体字段 (包含原始字段 + 失败元信息):
+--     orderId          - 原始订单ID
+--     userId           - 原始用户ID
+--     voucherId        - 原始秒杀券ID
+--     originalMessageId - 原始Stream消息ID (用于回溯)
+--     failureReason     - 失败原因 (当前固定为 MAX_DELIVERY_EXCEEDED)
+--     deliveryCount     - 路由到DLQ前的投递次数
+--     movedAt           - 移入DLQ的时间 (ISO格式)
+--   DLQ路由流程 (防误丢):
+--     1. XPENDING range 扫描 deliveryCount >= 3 的消息
+--     2. XADD stream.orders.dlq (写入DLQ)
+--     3. XADD 成功 → XACK 原消息; 只有 ack > 0 才算路由成功
+--     4. XADD 失败 → 消息留在 pending-list, ERROR 日志
+--     5. XADD 成功但 XACK 失败(0/null) → 消息留在 pending-list, ERROR 日志
+--        下一轮 pending 扫描可能重复写入 DLQ (接受多一条，不丢一条)
+--   幂等(后续增强): 新增 Redis Set seckill:dlq:routed, XADD 前 SISMEMBER 检查 originalMessageId
+--
+-- 查询命令参考:
+--   XPENDING stream.orders order-group                          # pending汇总
+--   XPENDING stream.orders order-group - + 50                   # pending详情(含deliveryCount)
+--   XRANGE stream.orders messageId messageId                    # 只读查消息体
+--   XRANGE stream.orders.dlq - +                                # 查看死信队列全部消息
+--   XLEN stream.orders                                          # 主队列长度
+--   XLEN stream.orders.dlq                                      # 死信队列长度

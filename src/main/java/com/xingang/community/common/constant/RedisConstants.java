@@ -34,6 +34,8 @@ public final class RedisConstants {
     public static final String SECKILL_ORDER_KEY = "seckill:order:";
     /** 秒杀订单Redis Stream */
     public static final String STREAM_ORDERS_KEY = "stream.orders";
+    /** 秒杀订单死信队列 Stream，存储超过最大投递次数的失败订单 */
+    public static final String STREAM_ORDERS_DLQ_KEY = "stream.orders.dlq";
     /** 用户维度分布式锁，变量: {userId} */
     public static final String LOCK_ORDER_KEY = "lock:order:";
 
