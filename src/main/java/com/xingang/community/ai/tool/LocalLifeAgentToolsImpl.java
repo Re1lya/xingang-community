@@ -199,6 +199,7 @@ public class LocalLifeAgentToolsImpl implements LocalLifeAgentTools {
             trace.setErrorCode(null);
             switch (toolName) {
                 case TOOL_SEARCH_SHOPS -> {
+                    snapshot.markExecuted(toolName);
                     ToolCallEnvelope<List<ShopCandidate>> envelope = searchShops(
                             request.getMessage(), plan.getIncludedCategories(), plan.getCity(), 10
                     );
@@ -212,6 +213,7 @@ public class LocalLifeAgentToolsImpl implements LocalLifeAgentTools {
                     snapshot.setSelectedShopId(selectedShopContext.shopId());
                 }
                 case TOOL_GET_SHOP_DETAIL -> {
+                    snapshot.markExecuted(toolName);
                     ToolCallEnvelope<ShopDetailFact> envelope = getShopDetail(selectedShopContext.shopId());
                     trace.setOutputSize(envelope.getOutputSize());
                     snapshot.setShopDetail(envelope.getData());
@@ -222,6 +224,7 @@ public class LocalLifeAgentToolsImpl implements LocalLifeAgentTools {
                     }
                 }
                 case TOOL_GET_SHOP_COUPONS -> {
+                    snapshot.markExecuted(toolName);
                     ToolCallEnvelope<List<CouponFact>> envelope = getShopCoupons(selectedShopContext.shopId());
                     trace.setOutputSize(envelope.getOutputSize());
                     snapshot.setShopCoupons(envelope.getData());
@@ -232,16 +235,19 @@ public class LocalLifeAgentToolsImpl implements LocalLifeAgentTools {
                     }
                 }
                 case TOOL_GET_HOT_BLOGS -> {
+                    snapshot.markExecuted(toolName);
                     trace.setOutputSize(getHotBlogs(plan.getCity(), 5).getOutputSize());
                     trace.setSuccess(false);
                     trace.setErrorCode("BLOG_SERVICE_NOT_READY");
                 }
                 case TOOL_GET_CURRENT_USER_LOCATION -> {
+                    snapshot.markExecuted(toolName);
                     ToolCallEnvelope<UserLocationFact> envelope = getCurrentUserLocation(userId, principalKey);
                     trace.setOutputSize(envelope.getOutputSize());
                     snapshot.setUserLocation(envelope.getData());
                 }
                 case TOOL_RECOMMEND_SHOPS -> {
+                    snapshot.markExecuted(toolName);
                     ToolCallEnvelope<List<ShopCandidate>> envelope = recommendShops(
                             plan.getCity(),
                             plan.getScenePreference(),
@@ -260,6 +266,7 @@ public class LocalLifeAgentToolsImpl implements LocalLifeAgentTools {
                     snapshot.setSelectedShopId(selectedShopContext.shopId());
                 }
                 case TOOL_RECOMMEND_SHOPS_V2 -> {
+                    snapshot.markExecuted(toolName);
                     ToolCallEnvelope<RecommendationResult> envelope = recommendShopsV2(
                             plan.getCity(),
                             plan.getLocationHint(),
@@ -280,6 +287,7 @@ public class LocalLifeAgentToolsImpl implements LocalLifeAgentTools {
                     snapshot.setSelectedShopId(selectedShopContext.shopId());
                 }
                 case TOOL_RECOMMEND_NEARBY_SHOPS -> {
+                    snapshot.markExecuted(toolName);
                     ToolCallEnvelope<List<ShopCandidate>> envelope = recommendNearbyShops(
                             plan.getCity(),
                             request.getLongitude(),

@@ -3,7 +3,9 @@ package com.xingang.community.ai.tool.model;
 import com.xingang.community.ai.agent.dto.AgentToolTrace;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Structured facts produced during Tool execution.
@@ -19,6 +21,7 @@ public class ToolExecutionSnapshot {
     private UserLocationFact userLocation;
     private Long selectedShopId;
     private List<String> missingFacts = new ArrayList<>();
+    private Set<String> executedTools = new LinkedHashSet<>();
 
     public List<AgentToolTrace> getToolTrace() {
         return toolTrace;
@@ -86,5 +89,27 @@ public class ToolExecutionSnapshot {
 
     public void addMissingFact(String missingFact) {
         this.missingFacts.add(missingFact);
+    }
+
+    public Set<String> getExecutedTools() {
+        return executedTools;
+    }
+
+    public void setExecutedTools(Set<String> executedTools) {
+        this.executedTools = executedTools == null ? new LinkedHashSet<>() : executedTools;
+    }
+
+    public void markExecuted(String toolName) {
+        if (toolName == null || toolName.isBlank()) {
+            return;
+        }
+        executedTools.add(toolName);
+    }
+
+    public boolean wasExecuted(String toolName) {
+        if (toolName == null || toolName.isBlank()) {
+            return false;
+        }
+        return executedTools.contains(toolName);
     }
 }

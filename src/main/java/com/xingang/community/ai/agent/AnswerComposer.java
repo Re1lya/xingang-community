@@ -2,6 +2,7 @@ package com.xingang.community.ai.agent;
 
 import com.xingang.community.ai.agent.dto.RetrievalHit;
 import com.xingang.community.ai.planning.AgentExecutionPlan;
+import com.xingang.community.ai.tool.LocalLifeAgentTools;
 import com.xingang.community.ai.tool.model.CouponFact;
 import com.xingang.community.ai.tool.model.ShopCandidate;
 import com.xingang.community.ai.tool.model.ShopDetailFact;
@@ -44,16 +45,16 @@ public class AnswerComposer {
             }
         }
 
-        parts.add(composeShopDetailText(snapshot.getShopDetail(), snapshot.getSelectedShopId()));
-        parts.add(composeCouponText(snapshot.getShopCoupons(), snapshot.getSelectedShopId()));
+        parts.add(composeShopDetailText(snapshot));
+        parts.add(composeCouponText(snapshot));
         parts.add(composeRagNotice(retrievalHits));
         return String.join("\n", parts);
     }
 
     private String composeFactQueryAnswer(ToolExecutionSnapshot snapshot, List<RetrievalHit> retrievalHits) {
         List<String> parts = new ArrayList<>();
-        parts.add(composeShopDetailText(snapshot.getShopDetail(), snapshot.getSelectedShopId()));
-        parts.add(composeCouponText(snapshot.getShopCoupons(), snapshot.getSelectedShopId()));
+        parts.add(composeShopDetailText(snapshot));
+        parts.add(composeCouponText(snapshot));
         parts.add(composeRagNotice(retrievalHits));
         return String.join("\n", parts);
     }
@@ -69,12 +70,17 @@ public class AnswerComposer {
         return "结合平台规则说明：" + (StringUtils.hasText(hit.getTitle()) ? hit.getTitle() : "已命中相关知识内容。");
     }
 
-    private String composeShopDetailText(ShopDetailFact detail, Long selectedShopId) {
+    private String composeShopDetailText(ToolExecutionSnapshot snapshot) {
+        if (!snapshot.wasExecuted(LocalLifeAgentTools.TOOL_GET_SHOP_DETAIL)) {
+            return "本次未查询店铺详情。";
+        }
+        ShopDetailFact detail = snapshot.getShopDetail();
+        Long selectedShopId = snapshot.getSelectedShopId();
         if (detail == null || detail.getShopId() == null) {
             if (selectedShopId == null) {
-                return "当前缺少可用 shopId，暂时无法查询店铺详情。";
+                return "已查询店铺详情，但当前缺少可用 shopId。";
             }
-            return "已尝试查询店铺详情，但暂未返回有效详情数据。";
+            return "已查询店铺详情，但暂未返回有效详情数据。";
         }
         List<String> fields = new ArrayList<>();
         fields.add("店铺详情：" + defaultText(detail.getName(), "未知店铺") + "（shopId=" + detail.getShopId() + "）");
@@ -85,12 +91,17 @@ public class AnswerComposer {
         return String.join("，", fields);
     }
 
-    private String composeCouponText(List<CouponFact> coupons, Long selectedShopId) {
+    private String composeCouponText(ToolExecutionSnapshot snapshot) {
+        if (!snapshot.wasExecuted(LocalLifeAgentTools.TOOL_GET_SHOP_COUPONS)) {
+            return "本次未查询优惠券信息。";
+        }
+        List<CouponFact> coupons = snapshot.getShopCoupons();
+        Long selectedShopId = snapshot.getSelectedShopId();
         if (CollectionUtils.isEmpty(coupons)) {
             if (selectedShopId == null) {
-                return "当前缺少可用 shopId，暂时无法查询优惠券。";
+                return "已查询店铺优惠券，但当前缺少可用 shopId。";
             }
-            return "该店铺当前未查询到可用优惠券。";
+            return "已查询该店铺优惠券，但当前未返回可用优惠券。";
         }
         List<String> lines = new ArrayList<>();
         lines.add("可用优惠券：");
