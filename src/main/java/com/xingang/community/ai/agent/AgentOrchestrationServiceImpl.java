@@ -21,6 +21,7 @@ import com.xingang.community.ai.rag.LocalLifeRagService;
 import com.xingang.community.ai.ratelimit.AgentRateLimitDecision;
 import com.xingang.community.ai.ratelimit.AgentRateLimitService;
 import com.xingang.community.ai.tool.LocalLifeAgentTools;
+import com.xingang.community.ai.tool.model.ToolExecutionSnapshot;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -50,6 +51,7 @@ public class AgentOrchestrationServiceImpl implements AgentOrchestrationService 
     private final AgentMemoryService memoryService;
     private final AgentRateLimitService rateLimitService;
     private final AgentAuditService auditService;
+    private final AnswerComposer answerComposer;
 
     public AgentOrchestrationServiceImpl(AgentPlanningService planningService,
                                          LocalLifeAgentTools localLifeAgentTools,
@@ -57,7 +59,8 @@ public class AgentOrchestrationServiceImpl implements AgentOrchestrationService 
                                          AiKnowledgeService aiKnowledgeService,
                                          AgentMemoryService memoryService,
                                          AgentRateLimitService rateLimitService,
-                                         AgentAuditService auditService) {
+                                         AgentAuditService auditService,
+                                         AnswerComposer answerComposer) {
         this.planningService = planningService;
         this.localLifeAgentTools = localLifeAgentTools;
         this.localLifeRagService = localLifeRagService;
@@ -65,6 +68,7 @@ public class AgentOrchestrationServiceImpl implements AgentOrchestrationService 
         this.memoryService = memoryService;
         this.rateLimitService = rateLimitService;
         this.auditService = auditService;
+        this.answerComposer = answerComposer;
     }
 
     @Override
@@ -149,9 +153,10 @@ public class AgentOrchestrationServiceImpl implements AgentOrchestrationService 
 
         List<ChatMessage> recentMessages = memoryService.getRecentMessages(conversationId, 8);
         AgentExecutionPlan plan = planningService.plan(request, recentMessages);
-        List<AgentToolTrace> toolTrace = localLifeAgentTools.executePreferredTools(plan, request, userId, resolvedPrincipal);
+        ToolExecutionSnapshot toolSnapshot = localLifeAgentTools.executePreferredTools(plan, request, userId, resolvedPrincipal);
+        List<AgentToolTrace> toolTrace = toolSnapshot.getToolTrace();
         List<RetrievalHit> retrievalHits = localLifeRagService.retrieve(request.getMessage(), plan);
-        String answer = buildAnswer(plan, toolTrace, retrievalHits);
+        String answer = answerComposer.compose(plan, toolSnapshot, retrievalHits);
         long latencyMs = System.currentTimeMillis() - start;
 
         memoryService.appendTurn(conversationId, request.getMessage(), answer);
@@ -246,18 +251,6 @@ public class AgentOrchestrationServiceImpl implements AgentOrchestrationService 
 
     private String summarizeConversation(AgentExecutionPlan plan, String message) {
         return "intent=" + plan.getIntent() + "; message=" + message;
-    }
-
-    private String buildAnswer(AgentExecutionPlan plan, List<AgentToolTrace> toolTrace, List<RetrievalHit> retrievalHits) {
-        List<String> parts = new ArrayList<>();
-        parts.add("已完成意图规划：" + plan.getIntent() + "。");
-        parts.add("工具调用次数：" + toolTrace.size() + "。");
-        parts.add("知识命中条数：" + retrievalHits.size() + "。");
-        parts.add("价格、优惠券、距离、营业状态等动态事实来自Tool/Service查询结果。");
-        if (!retrievalHits.isEmpty()) {
-            parts.add("平台规则与客服说明由RAG命中内容补充。");
-        }
-        return String.join("", parts);
     }
 
     private List<String> chunk(String answer, int maxChunkSize) {
