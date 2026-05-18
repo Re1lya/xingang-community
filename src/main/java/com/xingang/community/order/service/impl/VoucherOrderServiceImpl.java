@@ -402,11 +402,19 @@ public class VoucherOrderServiceImpl implements VoucherOrderService {
      * <ol>
      *   <li>仅检查 deliveryCount >= MAX_DELIVERY_COUNT，正常消息不受影响</li>
      *   <li>先 XADD 到 DLQ Stream，成功后才 XACK 原消息</li>
+     *   <li>XACK 返回值必须 ack != null && ack > 0 才计入 routed 成功数</li>
+     *   <li>XADD 成功但 XACK 返回 0/null 时：DLQ 已有副本，原消息留在 pending-list，记录 ERROR</li>
      *   <li>DLQ 保留完整原始字段（orderId/userId/voucherId）+ 失败元信息</li>
      *   <li>XADD 失败时消息留在 pending-list，记录 ERROR 日志</li>
      * </ol>
      *
-     * @return 本次路由到死信队列的消息数
+     * <h3>幂等说明（后续增强）</h3>
+     * <p>XADD 成功 + XACK 失败时，下一轮 pending 扫描会再次命中该消息并重复写入 DLQ。
+     * 当前设计接受"重复 DLQ 记录"（宁可多一条，不丢一条），运维可通过 originalMessageId 去重。
+     * 后续增强方案：新增 Redis Set {@code seckill:dlq:routed}，XADD 前 SISMEMBER 检查
+     * originalMessageId，已存在则跳过 XADD、直接重试 XACK。</p>
+     *
+     * @return 本次成功路由到死信队列的消息数（仅 XADD 成功且 XACK > 0 才计数）
      */
     private int routeExpiredToDeadLetter() {
         int routed = 0;
@@ -442,21 +450,29 @@ public class VoucherOrderServiceImpl implements VoucherOrderService {
                 dlqBody.put("deliveryCount", String.valueOf(pm.getTotalDeliveryCount()));
                 dlqBody.put("movedAt", LocalDateTime.now().toString());
 
-                // 先写DLQ，成功后再ACK原消息
+                // XADD → 校验 → XACK（只有 ack > 0 才算路由成功）
                 try {
                     RecordId dlqId = stringRedisTemplate.opsForStream()
                             .add(RedisConstants.STREAM_ORDERS_DLQ_KEY, dlqBody);
 
-                    if (dlqId != null) {
-                        stringRedisTemplate.opsForStream()
-                                .acknowledge(RedisConstants.STREAM_ORDERS_KEY,
-                                        STREAM_CONSUMER_GROUP, pm.getId().getValue());
-                        routed++;
-                        log.warn("Routed to DLQ: originalId={}, dlqId={}, deliveryCount={}",
-                                pm.getId().getValue(), dlqId.getValue(), pm.getTotalDeliveryCount());
-                    } else {
+                    if (dlqId == null) {
                         log.error("DLQ XADD returned null for messageId={}, message kept in pending",
                                 pm.getId().getValue());
+                        continue;
+                    }
+
+                    Long ack = stringRedisTemplate.opsForStream()
+                            .acknowledge(RedisConstants.STREAM_ORDERS_KEY,
+                                    STREAM_CONSUMER_GROUP, pm.getId().getValue());
+                    if (ack != null && ack > 0) {
+                        routed++;
+                        log.warn("DLQ routed and acked: originalId={}, dlqId={}, deliveryCount={}",
+                                pm.getId().getValue(), dlqId.getValue(), pm.getTotalDeliveryCount());
+                    } else {
+                        log.error("DLQ XACK failed after XADD: originalId={}, dlqId={}, ack={}. "
+                                        + "DLQ copy exists but message stays in pending-list. "
+                                        + "Next pending cycle may create duplicate DLQ entry.",
+                                pm.getId().getValue(), dlqId.getValue(), ack);
                     }
                 } catch (Exception e) {
                     log.error("DLQ route failed for messageId={}, message kept in pending",

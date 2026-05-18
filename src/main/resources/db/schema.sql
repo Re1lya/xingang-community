@@ -101,7 +101,14 @@ CREATE TABLE IF NOT EXISTS `voucher_order` (
 --     failureReason     - 失败原因 (当前固定为 MAX_DELIVERY_EXCEEDED)
 --     deliveryCount     - 路由到DLQ前的投递次数
 --     movedAt           - 移入DLQ的时间 (ISO格式)
---   防误丢保证: 先XADD到DLQ成功后才ACK原消息; XADD失败时消息保留在pending-list
+--   DLQ路由流程 (防误丢):
+--     1. XPENDING range 扫描 deliveryCount >= 3 的消息
+--     2. XADD stream.orders.dlq (写入DLQ)
+--     3. XADD 成功 → XACK 原消息; 只有 ack > 0 才算路由成功
+--     4. XADD 失败 → 消息留在 pending-list, ERROR 日志
+--     5. XADD 成功但 XACK 失败(0/null) → 消息留在 pending-list, ERROR 日志
+--        下一轮 pending 扫描可能重复写入 DLQ (接受多一条，不丢一条)
+--   幂等(后续增强): 新增 Redis Set seckill:dlq:routed, XADD 前 SISMEMBER 检查 originalMessageId
 --
 -- 查询命令参考:
 --   XPENDING stream.orders order-group                          # pending汇总

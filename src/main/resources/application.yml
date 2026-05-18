@@ -66,6 +66,9 @@ llm:
     api-key: ${OPENAI_API_KEY:}
     chat-model: ${OPENAI_CHAT_MODEL:}
 
+admin:
+  token: ${ADMIN_TOKEN:}
+
 logging:
   level:
     com.xingang.community: debug
