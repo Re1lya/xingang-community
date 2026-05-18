@@ -1,0 +1,709 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  letter-spacing: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+:focus-visible {
+  outline: 3px solid oklch(0.76 0.15 92 / 0.55);
+  outline-offset: 2px;
+}
+
+.app-shell {
+  min-height: 100vh;
+  padding-bottom: 74px;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px var(--space-page);
+  background: oklch(0.985 0.012 94 / 0.94);
+  border-bottom: 1px solid var(--color-border);
+  backdrop-filter: blur(14px);
+}
+
+.brand-mark,
+.header-location,
+.user-chip,
+.status-pill,
+.text-link,
+.shop-card__meta,
+.shop-card__address,
+.detail-hero__body p,
+.voucher-card__time,
+.button,
+.bottom-nav__item {
+  display: inline-flex;
+  align-items: center;
+}
+
+.brand-mark {
+  gap: 8px;
+  font-weight: 800;
+}
+
+.brand-mark__icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--color-primary);
+}
+
+.header-location,
+.user-chip {
+  gap: 5px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.app-main {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  padding: 18px var(--space-page) 24px;
+}
+
+.app-main--plain {
+  width: 100%;
+  padding: 0;
+}
+
+.bottom-nav {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  padding: 8px max(12px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-right));
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}
+
+.bottom-nav__item {
+  min-height: 48px;
+  justify-content: center;
+  gap: 5px;
+  border-radius: 8px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.bottom-nav__item.active {
+  background: oklch(0.9 0.11 92);
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.page-stack,
+.chat-page {
+  display: grid;
+  gap: 18px;
+}
+
+.login-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background:
+    linear-gradient(180deg, oklch(0.92 0.12 92), oklch(0.97 0.015 96) 52%),
+    var(--color-bg);
+}
+
+.login-panel {
+  width: min(420px, 100%);
+  padding: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.login-panel h1,
+.page-title-row h1,
+.detail-hero h1,
+.chat-header h1,
+.result-panel h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.18;
+}
+
+.login-panel p,
+.state-block p,
+.result-panel p,
+.voucher-card p {
+  color: var(--color-text-muted);
+}
+
+.state-block p,
+.chat-bubble {
+  white-space: pre-line;
+}
+
+.login-panel__mark {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 18px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--color-primary);
+}
+
+.form-stack {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.form-stack label {
+  display: grid;
+  gap: 7px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.form-stack input,
+.chat-composer input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0 12px;
+}
+
+.button,
+.icon-button {
+  min-height: 40px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  font-weight: 750;
+}
+
+.button {
+  justify-content: center;
+  gap: 7px;
+  padding: 0 14px;
+}
+
+.button--primary {
+  background: var(--color-primary);
+  color: var(--color-text);
+}
+
+.button--dark {
+  background: var(--color-text);
+  color: var(--color-surface);
+}
+
+.button--hot {
+  min-width: 92px;
+  background: var(--color-hot);
+  color: oklch(0.99 0.004 80);
+}
+
+.button--ghost {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+}
+
+.button--danger {
+  background: var(--color-danger);
+  color: oklch(0.99 0.004 80);
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+.icon-button {
+  display: grid;
+  width: 42px;
+  place-items: center;
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.icon-button--filled {
+  background: var(--color-text);
+  color: var(--color-surface);
+}
+
+.home-search,
+.page-title-row,
+.section-heading,
+.chat-header {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.search-box {
+  display: flex;
+  flex: 1;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text-soft);
+  padding: 0 12px;
+}
+
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.quick-grid a {
+  display: grid;
+  min-height: 86px;
+  place-items: center;
+  gap: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.quick-grid a:nth-child(3) {
+  background: oklch(0.94 0.07 62);
+}
+
+.section-block,
+.state-block,
+.result-panel,
+.detail-hero {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.section-block {
+  padding: 16px;
+}
+
+.section-heading {
+  margin-bottom: 12px;
+}
+
+.section-note {
+  margin: -4px 0 12px;
+  color: var(--color-text-soft);
+  font-size: 13px;
+}
+
+.section-heading h2,
+.state-block h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  color: var(--color-hot);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.text-link {
+  gap: 4px;
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.content-list {
+  display: grid;
+  gap: 12px;
+}
+
+.shop-card {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.shop-card__image,
+.detail-hero__image {
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: oklch(0.89 0.08 92);
+  color: var(--color-text);
+  font-weight: 900;
+}
+
+.shop-card__title-row {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.shop-card h3,
+.voucher-card h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.shop-card__meta,
+.shop-card__address,
+.detail-hero__body p,
+.voucher-card__time {
+  gap: 5px;
+  margin: 7px 0 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.shop-card__meta span {
+  margin-left: 6px;
+}
+
+.segmented-control {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.segmented-control button {
+  min-height: 38px;
+  min-width: 72px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-weight: 750;
+}
+
+.segmented-control button.is-active {
+  background: var(--color-primary);
+  color: var(--color-text);
+}
+
+.detail-hero {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  gap: 16px;
+  padding: 16px;
+}
+
+.voucher-card {
+  display: grid;
+  grid-template-columns: minmax(86px, 0.35fr) 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.voucher-card__value strong {
+  display: block;
+  color: var(--color-hot);
+  font-size: 21px;
+}
+
+.voucher-card__value span {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-text-soft);
+  font-size: 12px;
+}
+
+.voucher-card__body p {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+
+.state-block,
+.result-panel {
+  padding: 24px;
+  text-align: center;
+}
+
+.state-block__action {
+  margin-top: 16px;
+}
+
+.trace-note {
+  color: var(--color-text-soft);
+  font-size: 12px;
+  text-align: center;
+}
+
+.result-panel {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+}
+
+.result-panel svg {
+  color: var(--color-success);
+}
+
+.result-panel--error svg {
+  color: var(--color-danger);
+}
+
+.chat-page {
+  min-height: calc(100vh - 128px);
+  grid-template-rows: auto 1fr auto;
+}
+
+.status-pill {
+  gap: 5px;
+  min-height: 30px;
+  border-radius: 999px;
+  background: oklch(0.9 0.09 92);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.chat-window {
+  display: flex;
+  min-height: 420px;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-muted);
+}
+
+.chat-bubble {
+  max-width: min(72ch, 88%);
+  padding: 10px 12px;
+  border-radius: 8px;
+  line-height: 1.58;
+}
+
+.chat-bubble--user {
+  align-self: flex-end;
+  background: var(--color-primary);
+}
+
+.chat-bubble--assistant {
+  align-self: flex-start;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+.chat-bubble--system {
+  align-self: center;
+  background: transparent;
+  color: var(--color-text-soft);
+  font-size: 13px;
+}
+
+.chat-composer {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.typing-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--color-primary-strong);
+}
+
+.inline-error {
+  display: grid;
+  gap: 4px;
+  border: 1px solid oklch(0.72 0.14 32);
+  border-radius: var(--radius-card);
+  background: oklch(0.95 0.035 32);
+  color: var(--color-danger);
+  padding: 10px;
+  font-size: 13px;
+}
+
+.skeleton-list {
+  display: grid;
+  gap: 12px;
+}
+
+.skeleton-list span {
+  height: 92px;
+  border-radius: var(--radius-card);
+  background: linear-gradient(90deg, var(--color-surface-muted), var(--color-surface), var(--color-surface-muted));
+  background-size: 200% 100%;
+  animation: skeleton 1.1s ease-out infinite;
+}
+
+@keyframes skeleton {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (min-width: 760px) {
+  :root {
+    --space-page: 24px;
+  }
+
+  .app-shell {
+    padding-bottom: 0;
+  }
+
+  .bottom-nav {
+    right: auto;
+    top: 74px;
+    bottom: auto;
+    left: max(18px, calc((100vw - 1120px) / 2));
+    width: 168px;
+    grid-template-columns: 1fr;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .bottom-nav__item {
+    justify-content: flex-start;
+    padding: 0 12px;
+  }
+
+  .app-main {
+    padding-left: 210px;
+  }
+
+  .page-stack,
+  .chat-page {
+    gap: 22px;
+  }
+
+  .quick-grid {
+    grid-template-columns: repeat(4, minmax(120px, 1fr));
+  }
+
+  .content-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .section-block .content-list,
+  .shop-card,
+  .voucher-card {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .app-header {
+    grid-template-columns: 1fr auto;
+  }
+
+  .header-location {
+    display: none;
+  }
+
+  .home-search {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .quick-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .detail-hero,
+  .shop-card {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-hero__image,
+  .shop-card__image {
+    min-height: 84px;
+  }
+
+  .voucher-card {
+    grid-template-columns: 1fr;
+  }
+
+  .button--hot {
+    width: 100%;
+  }
+
+  .login-panel {
+    padding: 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
